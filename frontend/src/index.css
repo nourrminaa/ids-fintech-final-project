@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: rgb(238, 238, 238);
+  --color-text: rgb(0, 0, 0);
+  --color-primary: rgb(36, 160, 199);
+  --color-primary-dark: rgb(10, 91, 145);
+  --color-accent: rgb(136, 195, 228);
+  --color-border: rgb(229, 229, 229);
+  --color-overlay: rgba(68, 68, 68, 0.4);
+  --color-danger: rgb(155, 26, 29);
+  --color-success: rgb(21, 87, 36);
+}
+
+[data-theme='dark'] {
+  --color-bg: rgb(0, 0, 0);
+  --color-text: rgb(238, 238, 238);
+  --color-primary: rgb(36, 160, 199);
+  --color-primary-dark: rgb(136, 195, 228);
+  --color-accent: rgb(10, 91, 145);
+  --color-border: rgba(68, 68, 68, 0.4);
+  --color-overlay: rgba(68, 68, 68, 0.4);
+  --color-danger: rgb(155, 26, 29);
+  --color-success: rgb(21, 87, 36);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+html {
+  /* everything in the app is scaled up a step from the original default */
+  font-size: 17px;
+}
+
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* page-level titles only (Dashboard, Products, Client Details...): tracked
+   out and extra bold. Card and section headers stay off this class on
+   purpose so they read as normal, bold text instead */
+.page-header {
+  letter-spacing: 5px;
+  font-weight: 800;
+}
+
+nav, .navbar-text {
+  letter-spacing: -1px;
+}
+
+/* no rounded corners anywhere by default, this includes shadcn-style
+   components. the search bar is the one deliberate exception below */
+* {
+  border-radius: 0 !important;
+}
+
+.pill {
+  border-radius: 9999px !important;
+}
+
+input, select, textarea, button {
+  font-family: inherit;
+}
+
+::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme='dark'] ::placeholder {
+  color: rgba(238, 238, 238, 0.4);
+}
+
+/* plain icon buttons: no border, no background, just the glyph */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  transition: color 0.15s ease, opacity 0.15s ease;
+  opacity: 0.75;
+}
+
+.icon-btn:hover {
+  opacity: 1;
+  color: var(--color-primary);
+}
