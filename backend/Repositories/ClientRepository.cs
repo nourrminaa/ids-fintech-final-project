@@ -58,8 +58,10 @@ public class ClientRepository : IClientRepository
         using var connection = new SqlConnection(_connectionString);
 
         /* one round trip for the whole Client Details page, same reasoning as
-           ProductRepository.GetDetails, six queries batched together instead
-           of six separate awaits back and forth to the database */
+           ProductRepository.GetDetails, five queries batched together instead
+           of five separate awaits back and forth to the database. Responsible
+           Team here is ClientResponsibility only, no more folding in whoever
+           is responsible for a product this client happens to use */
         const string sql = @"
             SELECT Id, CompanyName, Country, ContactInformation, Status, Notes FROM Clients WHERE Id = @Id;
 
@@ -85,12 +87,7 @@ public class ClientRepository : IClientRepository
             SELECT cr.Id, cr.ClientId, cr.TeamMemberId, tm.FullName AS TeamMemberName, cr.Responsibility, cr.Description
             FROM ClientResponsibilities cr
             JOIN TeamMembers tm ON tm.Id = cr.TeamMemberId
-            WHERE cr.ClientId = @Id;
-
-            SELECT pr.Id, @Id AS ClientId, pr.TeamMemberId, tm.FullName AS TeamMemberName, pr.Responsibility, pr.Description
-            FROM ProductResponsibilities pr
-            JOIN TeamMembers tm ON tm.Id = pr.TeamMemberId
-            WHERE pr.ProductId IN (SELECT ProductId FROM Deployments WHERE ClientId = @Id);";
+            WHERE cr.ClientId = @Id;";
 
         using var multi = await connection.QueryMultipleAsync(sql, new { Id = id });
 
@@ -104,8 +101,7 @@ public class ClientRepository : IClientRepository
 
         var environmentRows = (await multi.ReadAsync<EnvironmentRow>()).ToList();
 
-        var directTeam = (await multi.ReadAsync<ClientResponsibilityView>()).ToList();
-        var throughProducts = (await multi.ReadAsync<ClientResponsibilityView>()).ToList();
+        var responsibleTeam = (await multi.ReadAsync<ClientResponsibilityView>()).ToList();
 
         var deployments = deploymentRows.Select(row => new DeploymentView(
             row.Id,
@@ -123,16 +119,9 @@ public class ClientRepository : IClientRepository
                 .ToList()
         )).ToList();
 
-        // direct client responsibilities win, then whatever comes from the
-        // client's products fills in the rest, deduplicated by TeamMemberId,
-        // same merge behaviour the frontend mock used to do in React state
-        var responsibleTeam = directTeam
-            .Concat(throughProducts)
-            .GroupBy(r => r.TeamMemberId)
-            .Select(g => g.First())
-            .ToList();
-
-        return new ClientDetails(client, deployments, responsibleTeam);
+        // CanEdit gets filled in by the service layer, which knows who's
+        // actually asking, this repo layer has no ClaimsPrincipal to check
+        return new ClientDetails(client, deployments, responsibleTeam, CanEdit: false);
     }
 
     public async Task<Client> Create(Client client)
@@ -298,5 +287,32 @@ public class ClientRepository : IClientRepository
 
         var count = await connection.ExecuteScalarAsync<int>(sql, new { ClientId = clientId, TeamMemberId = teamMemberId });
         return count > 0;
+    }
+
+    public async Task<ClientResponsibilityView> AddResponsibility(int clientId, int teamMemberId, string responsibility, string? description)
+    {
+        using var connection = new SqlConnection(_connectionString);
+
+        const string insertSql = @"
+            INSERT INTO ClientResponsibilities (ClientId, TeamMemberId, Responsibility, Description)
+            VALUES (@ClientId, @TeamMemberId, @Responsibility, @Description);
+            SELECT CAST(SCOPE_IDENTITY() AS int);";
+
+        var newId = await connection.ExecuteScalarAsync<int>(insertSql, new { ClientId = clientId, TeamMemberId = teamMemberId, Responsibility = responsibility, Description = description });
+
+        // grab the name too, same reasoning as ProductRepository.AddResponsibility,
+        // so the frontend gets back the same shape GetDetails would have given it
+        const string nameSql = "SELECT FullName FROM TeamMembers WHERE Id = @Id";
+        var teamMemberName = await connection.ExecuteScalarAsync<string>(nameSql, new { Id = teamMemberId });
+
+        return new ClientResponsibilityView(newId, clientId, teamMemberId, teamMemberName, responsibility, description);
+    }
+
+    public async Task<bool> DeleteResponsibility(int responsibilityId)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        const string sql = "DELETE FROM ClientResponsibilities WHERE Id = @Id";
+        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = responsibilityId });
+        return rowsAffected > 0;
     }
 }

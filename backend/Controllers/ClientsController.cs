@@ -1,3 +1,4 @@
+using IDS_API_Project.Dtos;
 using IDS_API_Project.Models;
 using IDS_API_Project.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -32,7 +33,7 @@ public class ClientsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetDetails(int id)
     {
-        var details = await _service.GetDetails(id);
+        var details = await _service.GetDetails(id, User);
         if (details is null)
             return NotFound();
 
@@ -125,6 +126,28 @@ public class ClientsController : ControllerBase
     public async Task<IActionResult> DeleteEnvironment(int id, int environmentId)
     {
         var result = await _service.DeleteEnvironment(id, environmentId, User);
+        if (!result.Success)
+            return Forbid();
+
+        return NoContent();
+    }
+
+    // Responsible Team on a client, direct ClientResponsibility rows only,
+    // same shape and same request DTO as ProductsController's version
+    [HttpPost("{id}/responsibilities")]
+    public async Task<IActionResult> AddResponsibility(int id, CreateResponsibilityRequest request)
+    {
+        var result = await _service.AddResponsibility(id, request.TeamMemberId, request.Responsibility, request.Description, User);
+        if (!result.Success)
+            return Forbid();
+
+        return Ok(result.Value);
+    }
+
+    [HttpDelete("{id}/responsibilities/{responsibilityId}")]
+    public async Task<IActionResult> DeleteResponsibility(int id, int responsibilityId)
+    {
+        var result = await _service.DeleteResponsibility(id, responsibilityId, User);
         if (!result.Success)
             return Forbid();
 

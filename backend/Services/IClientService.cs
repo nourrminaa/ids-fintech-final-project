@@ -11,7 +11,7 @@ namespace IDS_API_Project.Services;
 public interface IClientService
 {
     Task<List<Client>> GetAll(string? companyName, string? country, int? productId);
-    Task<ClientDetails?> GetDetails(int id);
+    Task<ClientDetails?> GetDetails(int id, ClaimsPrincipal actingUser);
     Task<Client> Create(Client client);
     Task<Result<Client>> Update(int id, Client client, ClaimsPrincipal actingUser);
     Task<Result<bool>> Delete(int id, ClaimsPrincipal actingUser);
@@ -25,4 +25,10 @@ public interface IClientService
     Task<Result<Environment>> AddEnvironment(int clientId, int deploymentId, Environment environment, ClaimsPrincipal actingUser);
     Task<Result<Environment>> UpdateEnvironment(int clientId, int environmentId, Environment environment, ClaimsPrincipal actingUser);
     Task<Result<bool>> DeleteEnvironment(int clientId, int environmentId, ClaimsPrincipal actingUser);
+
+    // Responsible Team on a client is direct ClientResponsibility only now,
+    // no more folding in whoever happens to be responsible for a product this
+    // client uses, same admin-or-assigned gate as everything else here
+    Task<Result<ClientResponsibilityView>> AddResponsibility(int clientId, int teamMemberId, string responsibility, string? description, ClaimsPrincipal actingUser);
+    Task<Result<bool>> DeleteResponsibility(int clientId, int responsibilityId, ClaimsPrincipal actingUser);
 }

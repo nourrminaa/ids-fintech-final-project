@@ -22,7 +22,14 @@ public class ClientService : IClientService
     public Task<List<Client>> GetAll(string? companyName, string? country, int? productId) =>
         _repo.GetAll(companyName, country, productId);
 
-    public Task<ClientDetails?> GetDetails(int id) => _repo.GetDetails(id);
+    public async Task<ClientDetails?> GetDetails(int id, ClaimsPrincipal actingUser)
+    {
+        var details = await _repo.GetDetails(id);
+        if (details is null) return null;
+
+        var canEdit = await CanEdit(id, actingUser);
+        return details with { CanEdit = canEdit };
+    }
 
     public Task<Client> Create(Client client) => _repo.Create(client);
 
@@ -98,6 +105,24 @@ public class ClientService : IClientService
 
         var deleted = await _repo.DeleteEnvironment(environmentId);
         return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Environment not found");
+    }
+
+    public async Task<Result<ClientResponsibilityView>> AddResponsibility(int clientId, int teamMemberId, string responsibility, string? description, ClaimsPrincipal actingUser)
+    {
+        if (!await CanEdit(clientId, actingUser))
+            return Result<ClientResponsibilityView>.Fail("You are not assigned to this client");
+
+        var created = await _repo.AddResponsibility(clientId, teamMemberId, responsibility, description);
+        return Result<ClientResponsibilityView>.Ok(created);
+    }
+
+    public async Task<Result<bool>> DeleteResponsibility(int clientId, int responsibilityId, ClaimsPrincipal actingUser)
+    {
+        if (!await CanEdit(clientId, actingUser))
+            return Result<bool>.Fail("You are not assigned to this client");
+
+        var deleted = await _repo.DeleteResponsibility(responsibilityId);
+        return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Not found");
     }
 
     private async Task<bool> CanEdit(int clientId, ClaimsPrincipal actingUser)

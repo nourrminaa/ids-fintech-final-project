@@ -12,6 +12,7 @@ import type {
   ClientDetails as ClientDetailsType,
   Environment,
   EnvironmentType,
+  TeamMember,
 } from "../types";
 import usePageMeta from "../shared/usePageMeta";
 import LoadingState from "../shared/LoadingState";
@@ -23,6 +24,7 @@ export default function ClientDetails() {
   const { deleteClient } = useData();
 
   const [details, setDetails] = useState<ClientDetailsType | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -58,6 +60,12 @@ export default function ClientDetails() {
 
   useEffect(() => {
     loadDetails();
+    // team members list is only needed for the "assign someone" dropdown,
+    // fetched once regardless of whether this person can actually edit
+    api
+      .getTeamMembers()
+      .then(setTeamMembers)
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
@@ -73,7 +81,7 @@ export default function ClientDetails() {
     return <EmptyState message={`Could not load this client: ${loadError}`} />;
   if (notFound || !details) return <EmptyState message="Client not found." />;
 
-  const { client, deployments, responsibleTeam } = details;
+  const { client, deployments, responsibleTeam, canEdit } = details;
   const usedProducts = Array.from(
     new Map(
       deployments.map((d) => [
@@ -102,8 +110,17 @@ export default function ClientDetails() {
   };
 
   const handleRemoveEnvironment = async (environmentId: number) => {
-    await api.deleteEnvironment(client.id, environmentId);
-    await loadDetails();
+    try {
+      await api.deleteEnvironment(client.id, environmentId);
+      await loadDetails();
+    } catch (err) {
+      console.error("failed to delete environment", err);
+      alert(
+        err instanceof api.ApiError
+          ? err.message
+          : "Could not reach the server",
+      );
+    }
   };
 
   return (
@@ -272,26 +289,13 @@ export default function ClientDetails() {
         )}
       </div>
 
-      <div>
-        <h2 className="text-base font-bold opacity-70 mb-4">
-          Responsible Team
-        </h2>
-        {responsibleTeam.length === 0 ? (
-          <EmptyState message="No team members assigned." />
-        ) : (
-          <ul className="grid md:grid-cols-2 gap-3">
-            {responsibleTeam.map((r) => (
-              <li
-                key={r.teamMemberId}
-                className="border border-border p-4 text-sm"
-              >
-                <p className="font-bold">{r.teamMemberName}</p>
-                <p className="opacity-60 text-xs">{r.responsibility}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <ResponsibleTeamSection
+        clientId={client.id}
+        responsibleTeam={responsibleTeam}
+        teamMembers={teamMembers}
+        canEdit={canEdit}
+        onChanged={loadDetails}
+      />
 
       {showDelete && (
         <ConfirmDialog
@@ -436,6 +440,106 @@ function AddDeploymentDialog({
   );
 }
 
+// direct ClientResponsibility CRUD, exact same shape as ProductDetails'
+// ResponsibleTeamSection, just pointed at the client responsibility endpoints
+// instead of the product ones
+function ResponsibleTeamSection({
+  clientId,
+  responsibleTeam,
+  teamMembers,
+  canEdit,
+  onChanged,
+}: {
+  clientId: number;
+  responsibleTeam: ClientDetailsType["responsibleTeam"];
+  teamMembers: TeamMember[];
+  canEdit: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [teamMemberId, setTeamMemberId] = useState<number | "">("");
+  const [responsibility, setResponsibility] = useState("");
+
+  const handleAdd = async () => {
+    if (!teamMemberId || !responsibility.trim()) return;
+    await api.addClientResponsibility(
+      clientId,
+      Number(teamMemberId),
+      responsibility,
+      "",
+    );
+    setTeamMemberId("");
+    setResponsibility("");
+    await onChanged();
+  };
+
+  const handleRemove = async (responsibilityId: number) => {
+    await api.deleteClientResponsibility(clientId, responsibilityId);
+    await onChanged();
+  };
+
+  return (
+    <div>
+      <h2 className="text-base font-bold opacity-70 mb-4">Responsible Team</h2>
+      {responsibleTeam.length === 0 ? (
+        <EmptyState message="No team members assigned." />
+      ) : (
+        <ul className="grid md:grid-cols-2 gap-3 mb-4">
+          {responsibleTeam.map((r) => (
+            <li
+              key={r.id}
+              className="border border-border p-4 text-sm flex items-start justify-between gap-2"
+            >
+              <div>
+                <p className="font-bold">{r.teamMemberName}</p>
+                <p className="opacity-60 text-xs">{r.responsibility}</p>
+              </div>
+              {canEdit && (
+                <button
+                  onClick={() => handleRemove(r.id)}
+                  aria-label={`remove ${r.teamMemberName}`}
+                  className="icon-btn text-sm shrink-0"
+                >
+                  <i className="bi bi-x-lg"></i>
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {canEdit && (
+        <div className="max-w-sm space-y-2">
+          <select
+            value={teamMemberId}
+            onChange={(e) =>
+              setTeamMemberId(e.target.value ? Number(e.target.value) : "")
+            }
+            className="w-full px-3 py-2 bg-bg border border-border outline-none text-sm"
+          >
+            <option value="">Choose a team member</option>
+            {teamMembers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.fullName}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <input
+              value={responsibility}
+              onChange={(e) => setResponsibility(e.target.value)}
+              placeholder="responsibility, e.g. Technical Owner"
+              className="flex-1 px-3 py-2 bg-transparent border border-border outline-none focus:border-primary text-sm"
+            />
+            <Button variant="outline" onClick={handleAdd}>
+              Add
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // used for both "add a new environment" (no environment prop) and "edit an
 // existing one" (environment prop pre-fills every field), same dialog either
 // way, only the submit call and the title text change
@@ -497,18 +601,30 @@ function EnvironmentDialog({
       notes,
     };
 
-    if (environment) {
-      await api.updateEnvironment(
-        clientId,
-        environment.id,
-        deploymentId,
-        payload,
+    // without this try/catch a failed request (backend down, 403, whatever)
+    // just silently did nothing, the dialog stayed open with no feedback and
+    // looked like a dead button, this at least surfaces what went wrong
+    try {
+      if (environment) {
+        await api.updateEnvironment(
+          clientId,
+          environment.id,
+          deploymentId,
+          payload,
+        );
+      } else {
+        await api.addEnvironment(clientId, deploymentId, payload);
+      }
+      await onSaved();
+      onClose();
+    } catch (err) {
+      console.error("failed to save environment", err);
+      setError(
+        err instanceof api.ApiError
+          ? err.message
+          : "Could not reach the server",
       );
-    } else {
-      await api.addEnvironment(clientId, deploymentId, payload);
     }
-    await onSaved();
-    onClose();
   };
 
   return (

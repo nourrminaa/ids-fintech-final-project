@@ -26,4 +26,6 @@ public interface IClientRepository
     // same idea as IProductRepository.IsTeamMemberAssigned, but through
     // ClientResponsibility instead of ProductResponsibility
     Task<bool> IsTeamMemberAssigned(int clientId, int teamMemberId);
+    Task<ClientResponsibilityView> AddResponsibility(int clientId, int teamMemberId, string responsibility, string? description);
+    Task<bool> DeleteResponsibility(int responsibilityId);
 }

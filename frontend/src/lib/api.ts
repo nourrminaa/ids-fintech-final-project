@@ -13,6 +13,7 @@ import type {
   ProductDocument,
   ProductResponsibility,
   Environment,
+  ClientResponsibility,
   ProductDetails,
   ClientDetails,
   DeploymentListItem,
@@ -256,6 +257,27 @@ export const updateEnvironment = (
 
 export const deleteEnvironment = (clientId: number, environmentId: number) =>
   request<void>(`/clients/${clientId}/environments/${environmentId}`, {
+    method: "DELETE",
+  });
+
+// Responsible Team on a client, direct ClientResponsibility only, no longer
+// folded in with whoever is responsible for a product this client uses
+export const addClientResponsibility = (
+  clientId: number,
+  teamMemberId: number,
+  responsibility: string,
+  description: string,
+) =>
+  request<ClientResponsibility>(`/clients/${clientId}/responsibilities`, {
+    method: "POST",
+    body: JSON.stringify({ teamMemberId, responsibility, description }),
+  });
+
+export const deleteClientResponsibility = (
+  clientId: number,
+  responsibilityId: number,
+) =>
+  request<void>(`/clients/${clientId}/responsibilities/${responsibilityId}`, {
     method: "DELETE",
   });
 
