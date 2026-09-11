@@ -329,6 +329,72 @@ ON Modules(ProductId)
 GO
 ```
 
+seed:
+
+```
+USE IdsProductsPortal
+GO
+
+INSERT INTO TeamMembers (FullName, JobTitle, Department, Email, Status) VALUES
+('John Smith', 'Backend Developer', 'Engineering', 'john.smith@idsfintech.com', 'Active'),
+('Layla Haddad', 'Technical Lead', 'Engineering', 'layla.haddad@idsfintech.com', 'Active'),
+('Marc Tannous', 'QA Engineer', 'Quality Assurance', 'marc.tannous@idsfintech.com', 'Active'),
+('Rana Abou Jaoude', 'Product Owner', 'Product', 'rana.aboujaoude@idsfintech.com', 'Active')
+GO
+
+INSERT INTO Users (Email, PasswordHash, Role, IsActive, TeamMemberId) VALUES
+('admin@idsfintech.com', 'REPLACE_WITH_REAL_HASH', 'Admin', 1, NULL),
+('john.smith@idsfintech.com', 'REPLACE_WITH_REAL_HASH', 'Employee', 1, 1)
+GO
+
+INSERT INTO Products (Name, Description, BusinessPurpose, LifecycleStatus, CurrentVersion, SupportedMarkets, Criticality, Technologies, Notes) VALUES
+('IDS Payment Platform', 'Core payment processing platform used by banking clients.', 'Lets clients process and settle payments end to end.', 'Active', '3.2', 'Lebanon,UAE,KSA', 'Critical', 'C#,.NET,SQL Server,React', 'Main revenue product'),
+('IDS Reporting Suite', 'Financial reporting and analytics tool for compliance teams.', 'Gives clients the regulatory reports they are required to file.', 'Maintenance', '1.8', 'Lebanon,Jordan', 'High', 'React,Node.js,PostgreSQL', NULL)
+GO
+
+INSERT INTO Modules (ProductId, Name, Description, Status) VALUES
+(1, 'Payments Core', 'Handles transaction processing.', 'Active'),
+(1, 'Fraud Detection', 'Flags suspicious transactions.', 'Active'),
+(2, 'Regulatory Export', 'Generates the required filing formats.', 'Active')
+GO
+
+INSERT INTO Clients (CompanyName, Country, ContactInformation, Status, Notes) VALUES
+('Cedar Bank', 'Lebanon', 'Nadine Khoury, nadine.khoury@cedarbank.com, +961 1 234 567', 'Active', NULL),
+('Beirut Trust', 'Lebanon', 'Karim Fares, karim.fares@beiruttrust.com', 'Onboarding', 'New client, go live planned next quarter')
+GO
+
+INSERT INTO Deployments (ClientId, ProductId, ProductVersion, GoLiveDate, DeploymentStatus, SupportTier, ClientSpecificNotes) VALUES
+(1, 1, '3.2', '2025-03-10', 'Production', 'Premium', NULL),
+(2, 1, '3.2', NULL, 'In Progress', 'Standard', 'Waiting on client side infrastructure')
+GO
+
+INSERT INTO DeploymentModules (DeploymentId, ModuleId) VALUES
+(1, 1),
+(1, 2)
+GO
+
+INSERT INTO Environments (DeploymentId, EnvironmentName, EnvironmentType, Purpose, ServerName, OperatingSystem, ApplicationUrl, DatabaseInfo, MonitoringLink, AccessInstructions, Notes) VALUES
+(1, 'Cedar Bank Production', 'Production', 'Live environment for Cedar Bank end users.', 'prod-abc-01', 'Ubuntu 22.04', 'https://cedarbank.idsfintech.com', 'SQL Server, prod-db-01', 'https://monitoring.idsfintech.com/abc-prod', 'Request access through the internal access portal.', NULL)
+GO
+
+INSERT INTO ProductResponsibilities (ProductId, TeamMemberId, Responsibility, Description) VALUES
+(1, 1, 'Backend Developer', 'Owns the payments core module.'),
+(1, 2, 'Technical Owner', 'Final say on architecture decisions for this product.')
+GO
+
+INSERT INTO ClientResponsibilities (ClientId, TeamMemberId, Responsibility, Description) VALUES
+(1, 3, 'Support Engineer', 'First point of contact for Cedar Bank support tickets.')
+GO
+
+INSERT INTO Repositories (ProductId, Name, GitHubUrl, MainBranch, Description) VALUES
+(1, 'ids-payment-platform-api', 'https://github.com/idsfintech/ids-payment-platform-api', 'main', 'Backend API for the payment platform.')
+GO
+
+INSERT INTO Documents (ProductId, DocumentName, DocumentType, Description, UrlOrFileReference, LastUpdatedDate) VALUES
+(1, 'Payment Platform Architecture', 'Architecture Diagram', 'High level diagram of the payment flow.', 'https://docs.idsfintech.com/payment-platform/architecture', '2025-01-15')
+GO
+```
+
 **8.2. Run the backend**
 
 ```
