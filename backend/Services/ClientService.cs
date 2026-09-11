@@ -4,6 +4,9 @@ using IDS_API_Project.Dtos;
 using IDS_API_Project.Models;
 using IDS_API_Project.Repositories;
 using IDS_API_Project.Security;
+// ImplicitUsings pulls in a global "using System;", which makes the bare name
+// Environment ambiguous with System.Environment, this alias is the fix
+using Environment = IDS_API_Project.Models.Environment;
 
 namespace IDS_API_Project.Services;
 
@@ -68,6 +71,33 @@ public class ClientService : IClientService
 
         await _repo.DisableModule(deploymentId, moduleId);
         return Result<bool>.Ok(true);
+    }
+
+    public async Task<Result<Environment>> AddEnvironment(int clientId, int deploymentId, Environment environment, ClaimsPrincipal actingUser)
+    {
+        if (!await CanEdit(clientId, actingUser))
+            return Result<Environment>.Fail("You are not assigned to this client");
+
+        var created = await _repo.AddEnvironment(deploymentId, environment);
+        return Result<Environment>.Ok(created);
+    }
+
+    public async Task<Result<Environment>> UpdateEnvironment(int clientId, int environmentId, Environment environment, ClaimsPrincipal actingUser)
+    {
+        if (!await CanEdit(clientId, actingUser))
+            return Result<Environment>.Fail("You are not assigned to this client");
+
+        var updated = await _repo.UpdateEnvironment(environmentId, environment);
+        return updated is null ? Result<Environment>.Fail("Environment not found") : Result<Environment>.Ok(updated);
+    }
+
+    public async Task<Result<bool>> DeleteEnvironment(int clientId, int environmentId, ClaimsPrincipal actingUser)
+    {
+        if (!await CanEdit(clientId, actingUser))
+            return Result<bool>.Fail("You are not assigned to this client");
+
+        var deleted = await _repo.DeleteEnvironment(environmentId);
+        return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Environment not found");
     }
 
     private async Task<bool> CanEdit(int clientId, ClaimsPrincipal actingUser)

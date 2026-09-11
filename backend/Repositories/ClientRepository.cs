@@ -2,6 +2,9 @@ using Dapper;
 using IDS_API_Project.Dtos;
 using IDS_API_Project.Models;
 using Microsoft.Data.SqlClient;
+// ImplicitUsings pulls in a global "using System;", which makes the bare name
+// Environment ambiguous with System.Environment, this alias is the fix
+using Environment = IDS_API_Project.Models.Environment;
 
 namespace IDS_API_Project.Repositories;
 
@@ -212,6 +215,77 @@ public class ClientRepository : IClientRepository
         using var connection = new SqlConnection(_connectionString);
         const string sql = "DELETE FROM DeploymentModules WHERE DeploymentId = @DeploymentId AND ModuleId = @ModuleId";
         await connection.ExecuteAsync(sql, new { DeploymentId = deploymentId, ModuleId = moduleId });
+    }
+
+    // adds one Environment row under a deployment, same insert-then-select-scope-identity
+    // shape as every other Create in this file
+    public async Task<Environment> AddEnvironment(int deploymentId, Environment environment)
+    {
+        using var connection = new SqlConnection(_connectionString);
+
+        const string sql = @"
+            INSERT INTO Environments (DeploymentId, EnvironmentName, EnvironmentType, Purpose, ServerName,
+                                       OperatingSystem, ApplicationUrl, DatabaseInfo, MonitoringLink, AccessInstructions, Notes)
+            VALUES (@DeploymentId, @EnvironmentName, @EnvironmentType, @Purpose, @ServerName,
+                    @OperatingSystem, @ApplicationUrl, @DatabaseInfo, @MonitoringLink, @AccessInstructions, @Notes);
+            SELECT CAST(SCOPE_IDENTITY() AS int);";
+
+        var newId = await connection.ExecuteScalarAsync<int>(sql, new
+        {
+            DeploymentId = deploymentId,
+            environment.EnvironmentName,
+            environment.EnvironmentType,
+            environment.Purpose,
+            environment.ServerName,
+            environment.OperatingSystem,
+            environment.ApplicationUrl,
+            environment.DatabaseInfo,
+            environment.MonitoringLink,
+            environment.AccessInstructions,
+            environment.Notes
+        });
+
+        return environment with { Id = newId, DeploymentId = deploymentId };
+    }
+
+    // DeploymentId is intentionally not updatable here, an environment does
+    // not move to a different deployment, it only ever gets edited in place
+    public async Task<Environment?> UpdateEnvironment(int environmentId, Environment environment)
+    {
+        using var connection = new SqlConnection(_connectionString);
+
+        const string sql = @"
+            UPDATE Environments
+            SET EnvironmentName = @EnvironmentName, EnvironmentType = @EnvironmentType, Purpose = @Purpose,
+                ServerName = @ServerName, OperatingSystem = @OperatingSystem, ApplicationUrl = @ApplicationUrl,
+                DatabaseInfo = @DatabaseInfo, MonitoringLink = @MonitoringLink, AccessInstructions = @AccessInstructions,
+                Notes = @Notes
+            WHERE Id = @Id";
+
+        var rowsAffected = await connection.ExecuteAsync(sql, new
+        {
+            Id = environmentId,
+            environment.EnvironmentName,
+            environment.EnvironmentType,
+            environment.Purpose,
+            environment.ServerName,
+            environment.OperatingSystem,
+            environment.ApplicationUrl,
+            environment.DatabaseInfo,
+            environment.MonitoringLink,
+            environment.AccessInstructions,
+            environment.Notes
+        });
+
+        return rowsAffected == 0 ? null : environment with { Id = environmentId };
+    }
+
+    public async Task<bool> DeleteEnvironment(int environmentId)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        const string sql = "DELETE FROM Environments WHERE Id = @Id";
+        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = environmentId });
+        return rowsAffected > 0;
     }
 
     public async Task<bool> IsTeamMemberAssigned(int clientId, int teamMemberId)

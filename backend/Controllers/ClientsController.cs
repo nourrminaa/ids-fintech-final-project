@@ -2,6 +2,9 @@ using IDS_API_Project.Models;
 using IDS_API_Project.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+// ImplicitUsings pulls in a global "using System;", which makes the bare name
+// Environment ambiguous with System.Environment, this alias is the fix
+using Environment = IDS_API_Project.Models.Environment;
 
 namespace IDS_API_Project.Controllers;
 
@@ -94,5 +97,37 @@ public class ClientsController : ControllerBase
             return Forbid();
 
         return Ok();
+    }
+
+    // adds an Environment under one of this client's deployments, gated by
+    // the same "assigned to this client, or admin" rule as everything else
+    [HttpPost("{id}/deployments/{deploymentId}/environments")]
+    public async Task<IActionResult> AddEnvironment(int id, int deploymentId, Environment environment)
+    {
+        var result = await _service.AddEnvironment(id, deploymentId, environment, User);
+        if (!result.Success)
+            return Forbid();
+
+        return Ok(result.Value);
+    }
+
+    [HttpPut("{id}/environments/{environmentId}")]
+    public async Task<IActionResult> UpdateEnvironment(int id, int environmentId, Environment environment)
+    {
+        var result = await _service.UpdateEnvironment(id, environmentId, environment, User);
+        if (!result.Success)
+            return Forbid();
+
+        return Ok(result.Value);
+    }
+
+    [HttpDelete("{id}/environments/{environmentId}")]
+    public async Task<IActionResult> DeleteEnvironment(int id, int environmentId)
+    {
+        var result = await _service.DeleteEnvironment(id, environmentId, User);
+        if (!result.Success)
+            return Forbid();
+
+        return NoContent();
     }
 }

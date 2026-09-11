@@ -6,7 +6,13 @@ import Badge from "../shared/Badge";
 import Button from "../shared/Button";
 import EmptyState from "../shared/EmptyState";
 import ConfirmDialog from "../shared/ConfirmDialog";
-import type { DeploymentStatus, SupportTier, ClientDetails as ClientDetailsType } from "../types";
+import type {
+  DeploymentStatus,
+  SupportTier,
+  ClientDetails as ClientDetailsType,
+  Environment,
+  EnvironmentType,
+} from "../types";
 import usePageMeta from "../shared/usePageMeta";
 import LoadingState from "../shared/LoadingState";
 
@@ -22,6 +28,10 @@ export default function ClientDetails() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [showAddDeployment, setShowAddDeployment] = useState(false);
+  const [envDialog, setEnvDialog] = useState<{
+    deploymentId: number;
+    environment?: Environment;
+  } | null>(null);
 
   const loadDetails = async () => {
     setLoading(true);
@@ -34,8 +44,12 @@ export default function ClientDetails() {
       if (err instanceof api.ApiError && err.status === 404) {
         setNotFound(true);
       } else {
-        console.error('failed to load client details', err);
-        setLoadError(err instanceof api.ApiError ? err.message : 'Could not reach the server');
+        console.error("failed to load client details", err);
+        setLoadError(
+          err instanceof api.ApiError
+            ? err.message
+            : "Could not reach the server",
+        );
       }
     } finally {
       setLoading(false);
@@ -55,12 +69,18 @@ export default function ClientDetails() {
   );
 
   if (loading) return <LoadingState label="Loading client" />;
-  if (loadError) return <EmptyState message={`Could not load this client: ${loadError}`} />;
+  if (loadError)
+    return <EmptyState message={`Could not load this client: ${loadError}`} />;
   if (notFound || !details) return <EmptyState message="Client not found." />;
 
   const { client, deployments, responsibleTeam } = details;
   const usedProducts = Array.from(
-    new Map(deployments.map((d) => [d.productId, { id: d.productId, name: d.productName }])).values(),
+    new Map(
+      deployments.map((d) => [
+        d.productId,
+        { id: d.productId, name: d.productName },
+      ]),
+    ).values(),
   );
 
   const handleDelete = async () => {
@@ -68,12 +88,21 @@ export default function ClientDetails() {
     navigate("/clients");
   };
 
-  const handleToggleModule = async (deploymentId: number, moduleId: number, currentlyOn: boolean) => {
+  const handleToggleModule = async (
+    deploymentId: number,
+    moduleId: number,
+    currentlyOn: boolean,
+  ) => {
     if (currentlyOn) {
       await api.disableModule(client.id, deploymentId, moduleId);
     } else {
       await api.enableModule(client.id, deploymentId, moduleId);
     }
+    await loadDetails();
+  };
+
+  const handleRemoveEnvironment = async (environmentId: number) => {
+    await api.deleteEnvironment(client.id, environmentId);
     await loadDetails();
   };
 
@@ -163,13 +192,57 @@ export default function ClientDetails() {
                   Go live {d.goLiveDate || "not set"}, {d.supportTier} support
                 </p>
 
-                {d.environments.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {d.environments.map((e) => (
-                      <Badge key={e.id} status={e.environmentType} />
-                    ))}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs opacity-60">Environments</p>
+                    <button
+                      onClick={() => setEnvDialog({ deploymentId: d.id })}
+                      className="text-xs hover:text-primary"
+                    >
+                      <i className="bi bi-plus-lg mr-1"></i>Add Environment
+                    </button>
                   </div>
-                )}
+                  {d.environments.length === 0 ? (
+                    <p className="text-xs opacity-50">No environments yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {d.environments.map((e) => (
+                        <div
+                          key={e.id}
+                          className="flex items-center justify-between gap-2 border border-border px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Badge status={e.environmentType} />
+                            <span className="text-xs truncate">
+                              {e.environmentName}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() =>
+                                setEnvDialog({
+                                  deploymentId: d.id,
+                                  environment: e,
+                                })
+                              }
+                              aria-label={`edit ${e.environmentName}`}
+                              className="icon-btn text-sm"
+                            >
+                              <i className="bi bi-pencil"></i>
+                            </button>
+                            <button
+                              onClick={() => handleRemoveEnvironment(e.id)}
+                              aria-label={`remove ${e.environmentName}`}
+                              className="icon-btn text-sm"
+                            >
+                              <i className="bi bi-x-lg"></i>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {d.availableModules.length > 0 && (
                   <div>
@@ -233,6 +306,16 @@ export default function ClientDetails() {
           clientId={client.id}
           onAdded={loadDetails}
           onClose={() => setShowAddDeployment(false)}
+        />
+      )}
+
+      {envDialog && (
+        <EnvironmentDialog
+          clientId={client.id}
+          deploymentId={envDialog.deploymentId}
+          environment={envDialog.environment}
+          onSaved={loadDetails}
+          onClose={() => setEnvDialog(null)}
         />
       )}
     </div>
@@ -347,6 +430,170 @@ function AddDeploymentDialog({
             Cancel
           </Button>
           <Button onClick={handleSubmit}>Assign</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// used for both "add a new environment" (no environment prop) and "edit an
+// existing one" (environment prop pre-fills every field), same dialog either
+// way, only the submit call and the title text change
+function EnvironmentDialog({
+  clientId,
+  deploymentId,
+  environment,
+  onSaved,
+  onClose,
+}: {
+  clientId: number;
+  deploymentId: number;
+  environment?: Environment;
+  onSaved: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [environmentName, setEnvironmentName] = useState(
+    environment?.environmentName ?? "",
+  );
+  const [environmentType, setEnvironmentType] = useState<EnvironmentType>(
+    environment?.environmentType ?? "Development",
+  );
+  const [purpose, setPurpose] = useState(environment?.purpose ?? "");
+  const [serverName, setServerName] = useState(environment?.serverName ?? "");
+  const [operatingSystem, setOperatingSystem] = useState(
+    environment?.operatingSystem ?? "",
+  );
+  const [applicationUrl, setApplicationUrl] = useState(
+    environment?.applicationUrl ?? "",
+  );
+  const [databaseInfo, setDatabaseInfo] = useState(
+    environment?.databaseInfo ?? "",
+  );
+  const [monitoringLink, setMonitoringLink] = useState(
+    environment?.monitoringLink ?? "",
+  );
+  const [accessInstructions, setAccessInstructions] = useState(
+    environment?.accessInstructions ?? "",
+  );
+  const [notes, setNotes] = useState(environment?.notes ?? "");
+  const [error, setError] = useState("");
+
+  const handleSubmit = async () => {
+    if (!environmentName.trim()) {
+      setError("Environment name is required");
+      return;
+    }
+
+    const payload = {
+      environmentName,
+      environmentType,
+      purpose,
+      serverName,
+      operatingSystem,
+      applicationUrl,
+      databaseInfo,
+      monitoringLink,
+      accessInstructions,
+      notes,
+    };
+
+    if (environment) {
+      await api.updateEnvironment(
+        clientId,
+        environment.id,
+        deploymentId,
+        payload,
+      );
+    } else {
+      await api.addEnvironment(clientId, deploymentId, payload);
+    }
+    await onSaved();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-overlay flex items-center justify-center z-50 p-4">
+      <div className="bg-bg border border-border p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-bold mb-4">
+          {environment ? "Edit Environment" : "Add Environment"}
+        </h3>
+
+        <div className="space-y-3">
+          <input
+            value={environmentName}
+            onChange={(e) => setEnvironmentName(e.target.value)}
+            placeholder="environment name, e.g. Production"
+            className="w-full px-3 py-2 bg-transparent border border-border outline-none text-sm"
+          />
+          <select
+            value={environmentType}
+            onChange={(e) =>
+              setEnvironmentType(e.target.value as EnvironmentType)
+            }
+            className="w-full px-3 py-2 bg-bg border border-border outline-none text-sm"
+          >
+            <option value="Development">Development</option>
+            <option value="Testing">Testing</option>
+            <option value="UAT">UAT</option>
+            <option value="Production">Production</option>
+          </select>
+          <input
+            value={purpose}
+            onChange={(e) => setPurpose(e.target.value)}
+            placeholder="purpose"
+            className="w-full px-3 py-2 bg-transparent border border-border outline-none text-sm"
+          />
+          <input
+            value={serverName}
+            onChange={(e) => setServerName(e.target.value)}
+            placeholder="server name"
+            className="w-full px-3 py-2 bg-transparent border border-border outline-none text-sm"
+          />
+          <input
+            value={operatingSystem}
+            onChange={(e) => setOperatingSystem(e.target.value)}
+            placeholder="operating system"
+            className="w-full px-3 py-2 bg-transparent border border-border outline-none text-sm"
+          />
+          <input
+            value={applicationUrl}
+            onChange={(e) => setApplicationUrl(e.target.value)}
+            placeholder="application url"
+            className="w-full px-3 py-2 bg-transparent border border-border outline-none text-sm"
+          />
+          <input
+            value={databaseInfo}
+            onChange={(e) => setDatabaseInfo(e.target.value)}
+            placeholder="database information"
+            className="w-full px-3 py-2 bg-transparent border border-border outline-none text-sm"
+          />
+          <input
+            value={monitoringLink}
+            onChange={(e) => setMonitoringLink(e.target.value)}
+            placeholder="monitoring link"
+            className="w-full px-3 py-2 bg-transparent border border-border outline-none text-sm"
+          />
+          <input
+            value={accessInstructions}
+            onChange={(e) => setAccessInstructions(e.target.value)}
+            placeholder="access instructions / reference (no passwords or secrets)"
+            className="w-full px-3 py-2 bg-transparent border border-border outline-none text-sm"
+          />
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="notes"
+            rows={2}
+            className="w-full px-3 py-2 bg-transparent border border-border outline-none text-sm"
+          />
+          {error && <p className="text-danger text-xs">{error}</p>}
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit}>{environment ? "Save" : "Add"}</Button>
         </div>
       </div>
     </div>
