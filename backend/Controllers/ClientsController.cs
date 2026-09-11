@@ -1,5 +1,6 @@
 using IDS_API_Project.Dtos;
 using IDS_API_Project.Models;
+using IDS_API_Project.Security;
 using IDS_API_Project.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -41,9 +42,11 @@ public class ClientsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "AdminOnly")] // creating a brand new client has nothing to "be assigned to" yet
     public async Task<IActionResult> Create(Client client)
     {
+        if (!PermissionChecker.IsAdmin(User) && PermissionChecker.GetTeamMemberId(User) is null)
+            return Forbid();
+
         var created = await _service.Create(client);
         return CreatedAtAction(nameof(GetDetails), new { id = created.Id }, created);
     }
