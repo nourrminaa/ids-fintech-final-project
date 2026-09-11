@@ -180,6 +180,13 @@ public class ProductRepository : IProductRepository
         return rowsAffected > 0;
     }
 
+    public async Task<int?> GetProductIdForModule(int moduleId)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        const string sql = "SELECT ProductId FROM Modules WHERE Id = @Id";
+        return await connection.QueryFirstOrDefaultAsync<int?>(sql, new { Id = moduleId });
+    }
+
     public async Task<bool> IsTeamMemberAssigned(int productId, int teamMemberId)
     {
         using var connection = new SqlConnection(_connectionString);
@@ -211,11 +218,11 @@ public class ProductRepository : IProductRepository
         return new ProductResponsibilityView(newId, productId, teamMemberId, teamMemberName, responsibility, description);
     }
 
-    public async Task<bool> DeleteResponsibility(int responsibilityId)
+    public async Task<bool> DeleteResponsibility(int productId, int responsibilityId)
     {
         using var connection = new SqlConnection(_connectionString);
-        const string sql = "DELETE FROM ProductResponsibilities WHERE Id = @Id";
-        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = responsibilityId });
+        const string sql = "DELETE FROM ProductResponsibilities WHERE Id = @Id AND ProductId = @ProductId";
+        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = responsibilityId, ProductId = productId });
         return rowsAffected > 0;
     }
 
@@ -232,11 +239,11 @@ public class ProductRepository : IProductRepository
         return repository with { Id = newId, ProductId = productId };
     }
 
-    public async Task<bool> DeleteRepository(int repositoryId)
+    public async Task<bool> DeleteRepository(int productId, int repositoryId)
     {
         using var connection = new SqlConnection(_connectionString);
-        const string sql = "DELETE FROM Repositories WHERE Id = @Id";
-        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = repositoryId });
+        const string sql = "DELETE FROM Repositories WHERE Id = @Id AND ProductId = @ProductId";
+        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = repositoryId, ProductId = productId });
         return rowsAffected > 0;
     }
 
@@ -262,11 +269,11 @@ public class ProductRepository : IProductRepository
         return document with { Id = newId, ProductId = productId };
     }
 
-    public async Task<bool> DeleteDocument(int documentId)
+    public async Task<bool> DeleteDocument(int productId, int documentId)
     {
         using var connection = new SqlConnection(_connectionString);
-        const string sql = "DELETE FROM Documents WHERE Id = @Id";
-        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = documentId });
+        const string sql = "DELETE FROM Documents WHERE Id = @Id AND ProductId = @ProductId";
+        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = documentId, ProductId = productId });
         return rowsAffected > 0;
     }
 }

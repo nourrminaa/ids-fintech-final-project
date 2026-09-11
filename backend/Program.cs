@@ -4,6 +4,7 @@ using IDS_API_Project.Repositories;
 using IDS_API_Project.Security;
 using IDS_API_Project.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Data.SqlClient;
 using Microsoft.IdentityModel.Tokens;
 
 // same idea as the async assignment project, when the app starts this file
@@ -103,8 +104,30 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 // Build the app:
 var app = builder.Build();
 
-// Middleware, order actually matters here, CORS has to come before auth, and
+// Middleware, order actually matters here, this has to wrap everything else
+// so it can catch whatever they throw, CORS has to come before auth, and
 // auth has to come before controllers get to run:
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    // several tables (Deployments -> Products, DeploymentModules -> Modules,
+    // Users/ProductResponsibilities/ClientResponsibilities -> TeamMembers) do
+    // not cascade on delete on purpose, deleting a row something else still
+    // points to used to bubble up as a raw unhandled 500, this turns that into
+    // a real 409 with a message instead
+    catch (SqlException ex) when (ex.Number == 547)
+    {
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            message = "This record is still referenced by other data and can't be deleted or changed."
+        });
+    }
+});
+
 app.UseHttpsRedirection();
 app.UseCors(CorsPolicyName);
 app.UseAuthentication();

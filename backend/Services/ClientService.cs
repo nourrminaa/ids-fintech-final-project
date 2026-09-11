@@ -67,8 +67,8 @@ public class ClientService : IClientService
         if (!await CanEdit(clientId, actingUser))
             return Result<bool>.Fail("You are not assigned to this client");
 
-        await _repo.EnableModule(deploymentId, moduleId);
-        return Result<bool>.Ok(true);
+        var ok = await _repo.EnableModule(clientId, deploymentId, moduleId);
+        return ok ? Result<bool>.Ok(true) : Result<bool>.Fail("That deployment does not belong to this client");
     }
 
     public async Task<Result<bool>> DisableModule(int clientId, int deploymentId, int moduleId, ClaimsPrincipal actingUser)
@@ -76,8 +76,8 @@ public class ClientService : IClientService
         if (!await CanEdit(clientId, actingUser))
             return Result<bool>.Fail("You are not assigned to this client");
 
-        await _repo.DisableModule(deploymentId, moduleId);
-        return Result<bool>.Ok(true);
+        var ok = await _repo.DisableModule(clientId, deploymentId, moduleId);
+        return ok ? Result<bool>.Ok(true) : Result<bool>.Fail("That deployment does not belong to this client");
     }
 
     public async Task<Result<Environment>> AddEnvironment(int clientId, int deploymentId, Environment environment, ClaimsPrincipal actingUser)
@@ -85,8 +85,10 @@ public class ClientService : IClientService
         if (!await CanEdit(clientId, actingUser))
             return Result<Environment>.Fail("You are not assigned to this client");
 
-        var created = await _repo.AddEnvironment(deploymentId, environment);
-        return Result<Environment>.Ok(created);
+        var created = await _repo.AddEnvironment(clientId, deploymentId, environment);
+        return created is null
+            ? Result<Environment>.Fail("That deployment does not belong to this client")
+            : Result<Environment>.Ok(created);
     }
 
     public async Task<Result<Environment>> UpdateEnvironment(int clientId, int environmentId, Environment environment, ClaimsPrincipal actingUser)
@@ -94,7 +96,7 @@ public class ClientService : IClientService
         if (!await CanEdit(clientId, actingUser))
             return Result<Environment>.Fail("You are not assigned to this client");
 
-        var updated = await _repo.UpdateEnvironment(environmentId, environment);
+        var updated = await _repo.UpdateEnvironment(clientId, environmentId, environment);
         return updated is null ? Result<Environment>.Fail("Environment not found") : Result<Environment>.Ok(updated);
     }
 
@@ -103,7 +105,7 @@ public class ClientService : IClientService
         if (!await CanEdit(clientId, actingUser))
             return Result<bool>.Fail("You are not assigned to this client");
 
-        var deleted = await _repo.DeleteEnvironment(environmentId);
+        var deleted = await _repo.DeleteEnvironment(clientId, environmentId);
         return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Environment not found");
     }
 
@@ -121,7 +123,7 @@ public class ClientService : IClientService
         if (!await CanEdit(clientId, actingUser))
             return Result<bool>.Fail("You are not assigned to this client");
 
-        var deleted = await _repo.DeleteResponsibility(responsibilityId);
+        var deleted = await _repo.DeleteResponsibility(clientId, responsibilityId);
         return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Not found");
     }
 

@@ -38,6 +38,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")] // creating a brand new product has nothing to "be assigned to" yet
     public async Task<IActionResult> Create(Product product)
     {
         var created = await _service.Create(product);
@@ -67,16 +68,19 @@ public class ProductsController : ControllerBase
     [HttpPost("{id}/modules")]
     public async Task<IActionResult> AddModule(int id, Module module)
     {
-        var created = await _service.AddModule(id, module);
-        return Ok(created);
+        var result = await _service.AddModule(id, module, User);
+        if (!result.Success)
+            return Forbid();
+
+        return Ok(result.Value);
     }
 
     [HttpDelete("modules/{moduleId}")]
     public async Task<IActionResult> DeleteModule(int moduleId)
     {
-        var deleted = await _service.DeleteModule(moduleId);
-        if (!deleted)
-            return NotFound();
+        var result = await _service.DeleteModule(moduleId, User);
+        if (!result.Success)
+            return Forbid(); // covers both "not found" and "not assigned", same convention as the rest of this controller
 
         return NoContent();
     }

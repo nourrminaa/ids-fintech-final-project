@@ -41,6 +41,7 @@ public class ClientsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")] // creating a brand new client has nothing to "be assigned to" yet
     public async Task<IActionResult> Create(Client client)
     {
         var created = await _service.Create(client);

@@ -50,9 +50,27 @@ public class ProductService : IProductService
         return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Product not found");
     }
 
-    public Task<Module> AddModule(int productId, Module module) => _repo.AddModule(productId, module);
+    public async Task<Result<Module>> AddModule(int productId, Module module, ClaimsPrincipal actingUser)
+    {
+        if (!await CanEdit(productId, actingUser))
+            return Result<Module>.Fail("You are not assigned to this product");
 
-    public Task<bool> DeleteModule(int moduleId) => _repo.DeleteModule(moduleId);
+        var created = await _repo.AddModule(productId, module);
+        return Result<Module>.Ok(created);
+    }
+
+    public async Task<Result<bool>> DeleteModule(int moduleId, ClaimsPrincipal actingUser)
+    {
+        var productId = await _repo.GetProductIdForModule(moduleId);
+        if (productId is null)
+            return Result<bool>.Fail("Not found");
+
+        if (!await CanEdit(productId.Value, actingUser))
+            return Result<bool>.Fail("You are not assigned to this product");
+
+        var deleted = await _repo.DeleteModule(moduleId);
+        return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Not found");
+    }
 
     public async Task<Result<ProductResponsibilityView>> AddResponsibility(int productId, int teamMemberId, string responsibility, string? description, ClaimsPrincipal actingUser)
     {
@@ -68,7 +86,7 @@ public class ProductService : IProductService
         if (!await CanEdit(productId, actingUser))
             return Result<bool>.Fail("You are not assigned to this product");
 
-        var deleted = await _repo.DeleteResponsibility(responsibilityId);
+        var deleted = await _repo.DeleteResponsibility(productId, responsibilityId);
         return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Not found");
     }
 
@@ -86,7 +104,7 @@ public class ProductService : IProductService
         if (!await CanEdit(productId, actingUser))
             return Result<bool>.Fail("You are not assigned to this product");
 
-        var deleted = await _repo.DeleteRepository(repositoryId);
+        var deleted = await _repo.DeleteRepository(productId, repositoryId);
         return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Not found");
     }
 
@@ -104,7 +122,7 @@ public class ProductService : IProductService
         if (!await CanEdit(productId, actingUser))
             return Result<bool>.Fail("You are not assigned to this product");
 
-        var deleted = await _repo.DeleteDocument(documentId);
+        var deleted = await _repo.DeleteDocument(productId, documentId);
         return deleted ? Result<bool>.Ok(true) : Result<bool>.Fail("Not found");
     }
 

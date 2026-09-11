@@ -32,7 +32,13 @@ public class UsersController : ControllerBase
     {
         var result = await _service.Create(request);
         if (!result.Success)
-            return Conflict(new { message = result.Error }); // 409, email already taken
+        {
+            // "email already taken" is the 409 case, an invalid Role is a plain
+            // 400, distinguish them by message since Result<T> only carries a string
+            return result.Error!.StartsWith("Role must be")
+                ? BadRequest(new { message = result.Error })
+                : Conflict(new { message = result.Error });
+        }
 
         return Ok(result.Value);
     }
@@ -42,7 +48,11 @@ public class UsersController : ControllerBase
     {
         var result = await _service.UpdateRoleAndStatus(id, request);
         if (!result.Success)
-            return NotFound(new { message = result.Error });
+        {
+            return result.Error!.StartsWith("Role must be")
+                ? BadRequest(new { message = result.Error })
+                : NotFound(new { message = result.Error });
+        }
 
         return Ok(result.Value);
     }

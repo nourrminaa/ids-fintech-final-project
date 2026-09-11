@@ -26,8 +26,18 @@ public class UserService : IUserService
         return users.Select(ToResponse).ToList();
     }
 
+    private static readonly string[] ValidRoles = { "Admin", "Employee" };
+
     public async Task<Result<UserResponse>> Create(CreateUserRequest request)
     {
+        // the DB's CHECK constraint on Role runs case-insensitively under SQL
+        // Server's default collation, but [Authorize(Policy = "AdminOnly")]
+        // checks the role claim case-sensitively, so a value like "admin" would
+        // pass the DB and then never be able to reach a single AdminOnly
+        // endpoint again, catch that here instead of finding out the hard way
+        if (!ValidRoles.Contains(request.Role))
+            return Result<UserResponse>.Fail($"Role must be one of: {string.Join(", ", ValidRoles)}");
+
         var existing = await _repo.GetByEmail(request.Email);
         if (existing is not null)
             return Result<UserResponse>.Fail("A user with this email already exists");
@@ -45,6 +55,9 @@ public class UserService : IUserService
 
     public async Task<Result<UserResponse>> UpdateRoleAndStatus(int id, UpdateUserRequest request)
     {
+        if (request.Role is not null && !ValidRoles.Contains(request.Role))
+            return Result<UserResponse>.Fail($"Role must be one of: {string.Join(", ", ValidRoles)}");
+
         var updated = await _repo.UpdateRoleAndStatus(id, request.Role, request.IsActive, request.TeamMemberId);
         return updated is null ? Result<UserResponse>.Fail("User not found") : Result<UserResponse>.Ok(ToResponse(updated));
     }

@@ -12,8 +12,8 @@ public interface IProductService
     Task<Product> Create(Product product);
     Task<Result<Product>> Update(int id, Product product, ClaimsPrincipal actingUser);
     Task<Result<bool>> Delete(int id, ClaimsPrincipal actingUser);
-    Task<Module> AddModule(int productId, Module module);
-    Task<bool> DeleteModule(int moduleId);
+    Task<Result<Module>> AddModule(int productId, Module module, ClaimsPrincipal actingUser);
+    Task<Result<bool>> DeleteModule(int moduleId, ClaimsPrincipal actingUser);
 
     Task<Result<ProductResponsibilityView>> AddResponsibility(int productId, int teamMemberId, string responsibility, string? description, ClaimsPrincipal actingUser);
     Task<Result<bool>> DeleteResponsibility(int productId, int responsibilityId, ClaimsPrincipal actingUser);

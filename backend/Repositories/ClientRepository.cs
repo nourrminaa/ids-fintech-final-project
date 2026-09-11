@@ -184,33 +184,57 @@ public class ClientRepository : IClientRepository
         return deployment with { Id = newId, ClientId = clientId };
     }
 
-    public async Task EnableModule(int deploymentId, int moduleId)
+    public async Task<bool> EnableModule(int clientId, int deploymentId, int moduleId)
     {
         using var connection = new SqlConnection(_connectionString);
 
-        // IF NOT EXISTS keeps this endpoint safe to call twice in a row, the
-        // unique constraint on the table would also catch it but this way we
-        // do not throw a needless exception for something the UI cannot really
-        // trigger twice on purpose anyway
+        // only touches DeploymentModules if this deployment actually belongs to
+        // clientId, SELECT at the end reports back whether that was true so the
+        // service can tell "not your deployment" apart from success. IF NOT
+        // EXISTS on the insert itself keeps this endpoint safe to call twice in
+        // a row, same as before
         const string sql = @"
-            IF NOT EXISTS (SELECT 1 FROM DeploymentModules WHERE DeploymentId = @DeploymentId AND ModuleId = @ModuleId)
-            INSERT INTO DeploymentModules (DeploymentId, ModuleId) VALUES (@DeploymentId, @ModuleId)";
+            IF EXISTS (SELECT 1 FROM Deployments WHERE Id = @DeploymentId AND ClientId = @ClientId)
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM DeploymentModules WHERE DeploymentId = @DeploymentId AND ModuleId = @ModuleId)
+                    INSERT INTO DeploymentModules (DeploymentId, ModuleId) VALUES (@DeploymentId, @ModuleId)
+                SELECT 1
+            END
+            ELSE
+                SELECT 0";
 
-        await connection.ExecuteAsync(sql, new { DeploymentId = deploymentId, ModuleId = moduleId });
+        var ownedByClient = await connection.ExecuteScalarAsync<int>(sql, new { ClientId = clientId, DeploymentId = deploymentId, ModuleId = moduleId });
+        return ownedByClient == 1;
     }
 
-    public async Task DisableModule(int deploymentId, int moduleId)
+    public async Task<bool> DisableModule(int clientId, int deploymentId, int moduleId)
     {
         using var connection = new SqlConnection(_connectionString);
-        const string sql = "DELETE FROM DeploymentModules WHERE DeploymentId = @DeploymentId AND ModuleId = @ModuleId";
-        await connection.ExecuteAsync(sql, new { DeploymentId = deploymentId, ModuleId = moduleId });
+
+        const string sql = @"
+            IF EXISTS (SELECT 1 FROM Deployments WHERE Id = @DeploymentId AND ClientId = @ClientId)
+            BEGIN
+                DELETE FROM DeploymentModules WHERE DeploymentId = @DeploymentId AND ModuleId = @ModuleId
+                SELECT 1
+            END
+            ELSE
+                SELECT 0";
+
+        var ownedByClient = await connection.ExecuteScalarAsync<int>(sql, new { ClientId = clientId, DeploymentId = deploymentId, ModuleId = moduleId });
+        return ownedByClient == 1;
     }
 
     // adds one Environment row under a deployment, same insert-then-select-scope-identity
-    // shape as every other Create in this file
-    public async Task<Environment> AddEnvironment(int deploymentId, Environment environment)
+    // shape as every other Create in this file. Returns null instead of creating
+    // anything if deploymentId does not actually belong to clientId
+    public async Task<Environment?> AddEnvironment(int clientId, int deploymentId, Environment environment)
     {
         using var connection = new SqlConnection(_connectionString);
+
+        const string checkSql = "SELECT COUNT(1) FROM Deployments WHERE Id = @DeploymentId AND ClientId = @ClientId";
+        var owned = await connection.ExecuteScalarAsync<int>(checkSql, new { DeploymentId = deploymentId, ClientId = clientId });
+        if (owned == 0)
+            return null;
 
         const string sql = @"
             INSERT INTO Environments (DeploymentId, EnvironmentName, EnvironmentType, Purpose, ServerName,
@@ -238,22 +262,27 @@ public class ClientRepository : IClientRepository
     }
 
     // DeploymentId is intentionally not updatable here, an environment does
-    // not move to a different deployment, it only ever gets edited in place
-    public async Task<Environment?> UpdateEnvironment(int environmentId, Environment environment)
+    // not move to a different deployment, it only ever gets edited in place.
+    // Joins through Deployments so an environment can only be reached via its
+    // own client's route, closing the cross-client IDOR
+    public async Task<Environment?> UpdateEnvironment(int clientId, int environmentId, Environment environment)
     {
         using var connection = new SqlConnection(_connectionString);
 
         const string sql = @"
-            UPDATE Environments
+            UPDATE e
             SET EnvironmentName = @EnvironmentName, EnvironmentType = @EnvironmentType, Purpose = @Purpose,
                 ServerName = @ServerName, OperatingSystem = @OperatingSystem, ApplicationUrl = @ApplicationUrl,
                 DatabaseInfo = @DatabaseInfo, MonitoringLink = @MonitoringLink, AccessInstructions = @AccessInstructions,
                 Notes = @Notes
-            WHERE Id = @Id";
+            FROM Environments e
+            JOIN Deployments d ON d.Id = e.DeploymentId
+            WHERE e.Id = @Id AND d.ClientId = @ClientId";
 
         var rowsAffected = await connection.ExecuteAsync(sql, new
         {
             Id = environmentId,
+            ClientId = clientId,
             environment.EnvironmentName,
             environment.EnvironmentType,
             environment.Purpose,
@@ -269,11 +298,14 @@ public class ClientRepository : IClientRepository
         return rowsAffected == 0 ? null : environment with { Id = environmentId };
     }
 
-    public async Task<bool> DeleteEnvironment(int environmentId)
+    public async Task<bool> DeleteEnvironment(int clientId, int environmentId)
     {
         using var connection = new SqlConnection(_connectionString);
-        const string sql = "DELETE FROM Environments WHERE Id = @Id";
-        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = environmentId });
+        const string sql = @"
+            DELETE e FROM Environments e
+            JOIN Deployments d ON d.Id = e.DeploymentId
+            WHERE e.Id = @Id AND d.ClientId = @ClientId";
+        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = environmentId, ClientId = clientId });
         return rowsAffected > 0;
     }
 
@@ -308,11 +340,11 @@ public class ClientRepository : IClientRepository
         return new ClientResponsibilityView(newId, clientId, teamMemberId, teamMemberName, responsibility, description);
     }
 
-    public async Task<bool> DeleteResponsibility(int responsibilityId)
+    public async Task<bool> DeleteResponsibility(int clientId, int responsibilityId)
     {
         using var connection = new SqlConnection(_connectionString);
-        const string sql = "DELETE FROM ClientResponsibilities WHERE Id = @Id";
-        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = responsibilityId });
+        const string sql = "DELETE FROM ClientResponsibilities WHERE Id = @Id AND ClientId = @ClientId";
+        var rowsAffected = await connection.ExecuteAsync(sql, new { Id = responsibilityId, ClientId = clientId });
         return rowsAffected > 0;
     }
 }
