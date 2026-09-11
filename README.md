@@ -41,7 +41,7 @@ _Note: A quick note on naming, since this trips people up: ".NET" is the overall
 
 **Database**
 
-- PostgreSQL, run locally through Docker for development
+- SQL Server runs locally through Docker
 
 **Technologies used**
 
