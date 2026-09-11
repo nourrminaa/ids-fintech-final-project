@@ -86,20 +86,23 @@ Everything else (repositories, documents, environments, responsibilities) is del
 
 The API follows a consistent REST pattern across resources: list, get by id, create, update and delete, with the obvious exceptions (you don't delete a login session for example). The main resource groups are:
 
-| Group                                 | Purpose                                     |
-| ------------------------------------- | ------------------------------------------- |
-| `/api/auth`                           | Login and logout, issues the JWT            |
-| `/api/users`                          | Admin only, manage login accounts and roles |
-| `/api/products`                       | Product CRUD                                |
-| `/api/products/{id}/modules`          | Modules belonging to a product              |
-| `/api/clients`                        | Client CRUD                                 |
-| `/api/deployments`                    | Client to product assignments               |
-| `/api/deployments/{id}/environments`  | Environments for a deployment               |
-| `/api/team-members`                   | Employee records and their status           |
-| `/api/products/{id}/responsibilities` | Who is responsible for a product and how    |
-| `/api/products/{id}/repositories`     | Repository links for a product              |
-| `/api/products/{id}/documents`        | Documentation links for a product           |
-| `/api/dashboard`                      | Aggregated counts and recent activity       |
+| Group                                                             | Purpose                                              |
+| ----------------------------------------------------------------- | ---------------------------------------------------- |
+| `/api/auth`                                                       | Login and logout, issues the JWT                     |
+| `/api/users`                                                      | Admin only, manage login accounts and roles          |
+| `/api/products`                                                   | Product CRUD                                         |
+| `/api/products/{id}/modules`                                      | Modules belonging to a product                       |
+| `/api/products/{id}/responsibilities`                             | Who is responsible for a product and how             |
+| `/api/products/{id}/repositories`                                 | Repository links for a product                       |
+| `/api/products/{id}/documents`                                    | Documentation links for a product                    |
+| `/api/clients`                                                    | Client CRUD                                          |
+| `/api/clients/{id}/deployments`                                   | Assigning a product to a client, as a deployment     |
+| `/api/clients/{id}/deployments/{deploymentId}/modules/{moduleId}` | Enabling or disabling a module on a deployment       |
+| `/api/clients/{id}/deployments/{deploymentId}/environments`       | Adding an environment to a deployment                |
+| `/api/clients/{id}/environments/{environmentId}`                  | Updating or deleting a single environment            |
+| `/api/deployments`                                                | Flat, filterable list of all deployments (read only) |
+| `/api/teammembers`                                                | Employee records and their status                    |
+| `/api/dashboard`                                                  | Aggregated counts and recent activity                |
 
 ## 7. Authentication and Security
 
